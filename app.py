@@ -9,7 +9,7 @@ import telebot
 app = Flask(__name__)
 
 # ===== CONFIG - 5% PROFIT / 3% LOSS Bhai =====
-TRADE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]
+TRADE_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
 TRADE_PERCENT = 10
 STOP_LOSS_PERCENT = 3   # 3% Loss pe SELL Bhai
 TAKE_PROFIT_PERCENT = 5 # 5% Profit pe SELL Bhai
@@ -142,10 +142,10 @@ def trading_bot():
                             except Exception as e2:
                                 print(f"Sell Error {symbol}: {e2}")
 
-                time.sleep(2)
+                time.sleep(10)
 
             print(f"✅ Cycle Complete - USDT: ${get_balance(client,'USDT'):.2f}")
-            time.sleep(30)
+            time.sleep(60)
 
         except Exception as e:
             print(f"Loop Error: {e}")

@@ -6,8 +6,14 @@ from flask import Flask
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 import telebot
-
 app = Flask(__name__)
+
+@app.route('/myip')
+def myip():
+    try:
+        return requests.get('https://api.ipify.org', timeout=5).text
+    except:
+        return "error"
 
 # ===== CONFIG - 5% PROFIT / 3% LOSS Bhai =====
 TRADE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]

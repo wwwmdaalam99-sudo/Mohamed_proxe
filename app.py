@@ -8,13 +8,13 @@ from binance.exceptions import BinanceAPIException
 import telebot
 app = Flask(__name__)
 
-# ===== CONFIG - 5% PROFIT / 3% LOSS Bhai =====
-TRADE_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
-TRADE_PERCENT = 80
-STOP_LOSS_PERCENT = 3   # 3% Loss pe SELL Bhai
-TAKE_PROFIT_PERCENT = 5 # 5% Profit pe SELL Bhai
-DAILY_PROFIT_TARGET = 5
-DAILY_LOSS_LIMIT = 3
+# ===== CONFIG - $1 ROZ Bhai 5 TRADE Bhai =====
+TRADE_SYMBOLS = ["SOLUSDT", "DOGEUSDT", "PEPEUSDT", "SHIBUSDT"]
+TRADE_PERCENT = 90
+STOP_LOSS_PERCENT = 1.2
+TAKE_PROFIT_PERCENT = 2.0
+DAILY_PROFIT_TARGET = 1
+DAILY_LOSS_LIMIT = 1
 daily_pnl = 0
 # ===== Telegram Send =====
 def send_telegram(msg):

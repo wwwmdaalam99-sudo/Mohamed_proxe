@@ -52,7 +52,7 @@ if BOT_TOKEN:
 
     @bot.message_handler(commands=['status'])
     def status_cmd(m):
-        bot.reply_to(m, f"📊 Auto Trading ON Bhai!\nCoins: {', '.join(TRADE_SYMBOLS)}\nProfit: {TAKE_PROFIT_PERCENT}% | Loss: {STOP_LOSS_PERCENT}%\nTrade Size: {TRADE_PERCENT}%\nDaily PNL: ${daily_pnl:.2f} / Target: ${DAILY_PROFIT_TARGET}\nCheck: Har 120 sec Bhai")
+        bot.reply_to(m, f"📊 Auto Trading ON Bhai!\nCoins: {', '.join(TRADE_SYMBOLS)}\nProfit: {TAKE_PROFIT_PERCENT}% | Loss: {STOP_LOSS_PERCENT}%\nTrade Size: {TRADE_PERCENT}%\nDaily PNL: ${daily_pnl:.2f} / Target: ${DAILY_PROFIT_TARGET}\nCheck: Har 300 sec Bhai")
 
     def run_telebot():
         print("🤖 Telegram Bot Running...")

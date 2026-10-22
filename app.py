@@ -9,11 +9,11 @@ import telebot
 
 app = Flask(__name__)
 
-# ===== CONFIG - $1 ROZ Bhai 5 TRADE Bhai - SAME HAI BHAI =====
+# ===== CONFIG - DIP BUY BHAI - NEECHE PE KHARID UPAR PE BECH BHAI =====
 TRADE_SYMBOLS = ["SOLUSDT", "DOGEUSDT", "PEPEUSDT", "SHIBUSDT"]
 TRADE_PERCENT = 90
 STOP_LOSS_PERCENT = 1.2
-TAKE_PROFIT_PERCENT = 3.0
+TAKE_PROFIT_PERCENT = 2.0  # BHAI 3 SE 2 KIYA BHAI JALDI PROFIT BHAI
 DAILY_PROFIT_TARGET = 2.50
 DAILY_LOSS_LIMIT = 1
 daily_pnl = 0
@@ -36,7 +36,7 @@ if BOT_TOKEN:
 
     @bot.message_handler(commands=['start'])
     def start_cmd(m):
-        bot.reply_to(m, f"✅ Mohamed Bot LIVE Bhai!\n💰 Daily Target: ${DAILY_PROFIT_TARGET}\n📉 Loss Limit: ${DAILY_LOSS_LIMIT}\nCoins: {', '.join(TRADE_SYMBOLS)}\nProfit: {TAKE_PROFIT_PERCENT}% / Loss: {STOP_LOSS_PERCENT}%\nTrade: {TRADE_PERCENT}%\n/status /balance Working Bhai!")
+        bot.reply_to(m, f"✅ Mohamed DIP Bot LIVE Bhai!\n💰 Daily Target: ${DAILY_PROFIT_TARGET}\n📉 Loss Limit: ${DAILY_LOSS_LIMIT}\nCoins: {', '.join(TRADE_SYMBOLS)}\nProfit: {TAKE_PROFIT_PERCENT}% / Loss: {STOP_LOSS_PERCENT}%\nStrategy: NEECHE PE BUY / UPAR PE SELL Bhai!\n/status /balance Working Bhai!")
 
     @bot.message_handler(commands=['balance'])
     def balance_cmd(m):
@@ -52,7 +52,7 @@ if BOT_TOKEN:
 
     @bot.message_handler(commands=['status'])
     def status_cmd(m):
-        bot.reply_to(m, f"📊 Auto Trading ON Bhai!\nCoins: {', '.join(TRADE_SYMBOLS)}\nProfit: {TAKE_PROFIT_PERCENT}% | Loss: {STOP_LOSS_PERCENT}%\nTrade Size: {TRADE_PERCENT}%\nDaily PNL: ${daily_pnl:.2f} / Target: ${DAILY_PROFIT_TARGET}\nCheck: Har 300 sec Bhai")
+        bot.reply_to(m, f"📊 DIP Bot ON Bhai!\nCoins: {', '.join(TRADE_SYMBOLS)}\nStrategy: NEECHE GIRNE PE BUY, UPAR JANE PE SELL Bhai!\nProfit: {TAKE_PROFIT_PERCENT}% | Loss: {STOP_LOSS_PERCENT}%\nDaily PNL: ${daily_pnl:.2f} / Target: ${DAILY_PROFIT_TARGET}\nCheck: Har 300 sec Bhai")
 
     def run_telebot():
         print("🤖 Telegram Bot Running...")
@@ -68,7 +68,7 @@ if BOT_TOKEN:
 # ===== Flask =====
 @app.route('/')
 def home():
-    return f"✅ Mohamed Bot LIVE - {TAKE_PROFIT_PERCENT}% Profit / {STOP_LOSS_PERCENT}% Loss - AED + /start Working!"
+    return f"✅ Mohamed DIP Bot LIVE - NEECHE BUY / UPAR SELL - {TAKE_PROFIT_PERCENT}% Profit"
 
 @app.route('/health')
 def health(): return "OK", 200
@@ -99,7 +99,7 @@ def get_qty_precision(client, symbol):
 
 def trading_bot():
     global daily_pnl
-    print("🚀 REAL Bot Starting...")
+    print("🚀 DIP Bot Starting... NEECHE BUY / UPAR SELL Bhai!")
     api_key = os.environ.get("BINANCE_API_KEY")
     api_secret = os.environ.get("BINANCE_API_SECRET")
     if not api_key or not api_secret:
@@ -109,13 +109,12 @@ def trading_bot():
     client = Client(api_key, api_secret)
     usdt_bal = get_balance(client, "USDT")
     aed_bal = usdt_bal * 3.67
-    send_telegram(f"✅ BOT LIVE Bhai! 🚀\n\nStrategy: {TAKE_PROFIT_PERCENT}% Profit / {STOP_LOSS_PERCENT}% Loss\n\n💰 USDT: ${usdt_bal:.2f}\n💵 AED: {aed_bal:.2f} AED\nTarget: ${DAILY_PROFIT_TARGET} Bhai!")
+    send_telegram(f"✅ DIP BOT LIVE Bhai! 🚀\n\nStrategy: NEECHE GIRNE PE BUY / UPAR JANE PE SELL Bhai!\n\n💰 USDT: ${usdt_bal:.2f}\n💵 AED: {aed_bal:.2f} AED\nTarget: ${DAILY_PROFIT_TARGET} Bhai!")
 
     entry_prices = {}
 
     while True:
         try:
-            # BHAI DAILY TARGET CHECK
             if daily_pnl >= DAILY_PROFIT_TARGET:
                 send_telegram(f"✅ TARGET PURA BHAI! Daily: ${daily_pnl:.2f} Bhai Kal Tak Band Bhai!")
                 time.sleep(3600)
@@ -127,7 +126,7 @@ def trading_bot():
 
             for symbol in TRADE_SYMBOLS:
                 try:
-                    time.sleep(1.5)  # BHAI IP BAN FIX BHAI
+                    time.sleep(2)  # BHAI IP BAN FIX BHAI
                     base_coin = symbol.replace("USDT", "")
                     current_price = get_current_price(client, symbol)
                     if current_price == 0: continue
@@ -137,36 +136,43 @@ def trading_bot():
                     ema9 = sum(closes[-9:]) / 9
                     ema21 = sum(closes[-21:]) / 21
 
+                    # BHAI NAYA LOGIC: KITNA GIRA BHAI?
+                    price_1h_ago = closes[-4]  # BHAI 1 GHANTA PEHLE BHAI 15MIN * 4
+                    dip_percent = ((current_price - price_1h_ago) / price_1h_ago) * 100
+
                     usdt_balance = get_balance(client, "USDT")
                     coin_balance = get_balance(client, base_coin)
 
-                    print(f"Bhai Check {symbol} Price:{current_price} EMA9:{ema9:.2f} EMA21:{ema21:.2f} USDT:{usdt_balance:.2f}")
+                    print(f"Bhai Check {symbol} Price:{current_price} Dip:{dip_percent:.2f}% EMA9:{ema9:.2f} EMA21:{ema21:.2f} USDT:{usdt_balance:.2f}")
 
-                    # BUY - EMA Cross Up
-                    if ema9 > ema21 and usdt_balance > 10:
+                    # ===== BHAI YAHAN CHANGE KIYA BHAI - DIP BUY BHAI =====
+                    # BHAI PEHLE: ema9 > ema21 tha BHAI (UPAR PE BUY)
+                    # BHAI AB: ema9 < ema21 HAI BHAI + -1% GIRA HO TO BUY BHAI (NEECHE PE BUY)
+                    if ema9 < ema21 and dip_percent <= -1.0 and usdt_balance > 10:
                         if coin_balance * current_price < 5:
                             buy_usdt = usdt_balance * (TRADE_PERCENT / 100)
                             if buy_usdt > 10:
-                                # BHAI YE FIX KIYA BHAI PRECISION KA BHAI
                                 precision = get_qty_precision(client, symbol)
                                 qty = round(buy_usdt / current_price, precision)
                                 if qty > 0:
                                     try:
                                         order = client.create_order(symbol=symbol, side='BUY', type='MARKET', quantity=qty)
                                         entry_prices[symbol] = current_price
-                                        send_telegram(f"🟢 BUY Bhai!\nCoin: {symbol}\nPrice: {current_price}\nQty: {qty}")
-                                        print(f"BUY {symbol} at {current_price}")
+                                        send_telegram(f"🟢 DIP BUY Bhai! SASTA KHARIDA BHAI!\nCoin: {symbol}\nPrice: {current_price}\nDip: {dip_percent:.2f}%\nQty: {qty}\nEMA9 {ema9:.2f} < EMA21 {ema21:.2f} Bhai!")
+                                        print(f"DIP BUY {symbol} at {current_price} Dip {dip_percent:.2f}%")
                                     except BinanceAPIException as e:
                                         print(f"Buy Error {symbol}: {e}")
 
-                    # SELL - 3% Profit ya 1.2% Loss ya EMA Down
+                    # ===== BHAI SELL CHANGE KIYA BHAI - UPAR PE SELL BHAI =====
+                    # BHAI PEHLE: ema9 < ema21 pe SELL karta tha BHAI
+                    # BHAI AB: ema9 > ema21 pe SELL karega BHAI + PROFIT PE BHI BHAI
                     if symbol in entry_prices and coin_balance * current_price > 5:
                         entry = entry_prices[symbol]
                         pnl_percent = ((current_price - entry) / entry) * 100
 
-                        if pnl_percent >= TAKE_PROFIT_PERCENT or pnl_percent <= -STOP_LOSS_PERCENT or ema9 < ema21:
+                        # BHAI AB UPAR JANE PE SELL BHAI
+                        if pnl_percent >= TAKE_PROFIT_PERCENT or pnl_percent <= -STOP_LOSS_PERCENT or ema9 > ema21:
                             try:
-                                # BHAI YE BHI FIX KIYA BHAI PRECISION KA
                                 precision = get_qty_precision(client, symbol)
                                 qty_to_sell = round(coin_balance * 0.99, precision)
                                 if qty_to_sell > 0:
@@ -174,12 +180,14 @@ def trading_bot():
                                     pnl_aed = (current_price - entry) * coin_balance * 3.67
                                     profit_dollar = (current_price - entry) * coin_balance
                                     daily_pnl += profit_dollar
-                                    send_telegram(f"{'🟢 3% PROFIT SELL' if pnl_percent > 0 else '🔴 LOSS SELL'} Bhai!\nCoin: {symbol}\nPNL: {pnl_percent:.2f}% (${profit_dollar:.2f} / AED {pnl_aed:.2f})\nDaily: ${daily_pnl:.2f}")
+                                    reason = "PROFIT" if pnl_percent > 0 else "LOSS"
+                                    if ema9 > ema21:
+                                        reason = "UPAR GAYA - MEHENGA BECHA BHAI"
+                                    send_telegram(f"{'🟢 PROFIT SELL - UPAR BECHA BHAI!' if pnl_percent > 0 else '🔴 LOSS SELL'} Bhai!\nCoin: {symbol}\nReason: {reason}\nPNL: {pnl_percent:.2f}% (${profit_dollar:.2f} / AED {pnl_aed:.2f})\nDaily: ${daily_pnl:.2f}")
                                     del entry_prices[symbol]
-                                    print(f"SELL - {symbol} PNL {pnl_percent}%")
+                                    print(f"SELL - {symbol} PNL {pnl_percent}% Reason: {reason}")
                             except BinanceAPIException as e:
                                 try:
-                                    # BHAI AGAR SELL FAIL HO TO DOBARA TRY BHAI
                                     qty_to_sell = round(coin_balance, precision)
                                     client.create_order(symbol=symbol, side='SELL', type='MARKET', quantity=qty_to_sell)
                                     del entry_prices[symbol]
@@ -193,15 +201,18 @@ def trading_bot():
                 time.sleep(15)
 
             print(f"✅ Cycle Complete - USDT: ${get_balance(client, 'USDT'):.2f} Bhai")
-            time.sleep(120)
+            time.sleep(180)  # BHAI 3 MIN WAIT BHAI BAN NAHI HOGA BHAI
 
         except Exception as e:
             print(f"Loop Error: {e}")
-            time.sleep(10)
+            if "-1003" in str(e) or "banned" in str(e):
+                print("BHAI BAN HAI BHAI 10 MIN RUK JA BHAI!")
+                time.sleep(600)
+            else:
+                time.sleep(10)
 
 threading.Thread(target=trading_bot, daemon=True).start()
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
-        

@@ -147,7 +147,7 @@ def trading_bot():
                 time.sleep(5)
 
             print(f"✅ Cycle Complete - USDT: ${get_balance(client,'USDT'):.2f}")
-            time.sleep(300)
+            time.sleep(99)
 
         except Exception as e:
             print(f"Loop Error: {e}")

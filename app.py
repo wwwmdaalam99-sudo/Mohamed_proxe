@@ -10,10 +10,12 @@ app = Flask(__name__)
 
 # ===== CONFIG - 5% PROFIT / 3% LOSS Bhai =====
 TRADE_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
-TRADE_PERCENT = 10
+TRADE_PERCENT = 80
 STOP_LOSS_PERCENT = 3   # 3% Loss pe SELL Bhai
 TAKE_PROFIT_PERCENT = 5 # 5% Profit pe SELL Bhai
-
+DAILY_PROFIT_TARGET = 5
+DAILY_LOSS_LIMIT = 3
+daily_pnl = 0
 # ===== Telegram Send =====
 def send_telegram(msg):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -142,10 +144,10 @@ def trading_bot():
                             except Exception as e2:
                                 print(f"Sell Error {symbol}: {e2}")
 
-                time.sleep(10)
+                time.sleep(5)
 
             print(f"✅ Cycle Complete - USDT: ${get_balance(client,'USDT'):.2f}")
-            time.sleep(60)
+            time.sleep(300)
 
         except Exception as e:
             print(f"Loop Error: {e}")

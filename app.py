@@ -62,14 +62,22 @@ if BOT_TOKEN:
     def status_cmd(m):
         bot.reply_to(m, f"📊 DIP Bot ON Bhai!\nCoins: {', '.join(TRADE_SYMBOLS)}\nStrategy: NEECHE GIRNE PE BUY, UPAR JANE PE SELL Bhai!\nProfit: {TAKE_PROFIT_PERCENT}% | Loss: {STOP_LOSS_PERCENT}%\nDaily PNL: ${daily_pnl:.2f} / Target: ${DAILY_PROFIT_TARGET}\nCheck: Har 600 sec Bhai")
 
-    def run_telebot():
+        def run_telebot():
         print("🤖 Telegram Bot Running...")
+        try:
+            bot.remove_webhook()
+            time.sleep(3)
+        except: pass
         while True:
             try:
-                bot.infinity_polling(timeout=60, long_polling_timeout=60)
+                bot.infinity_polling(timeout=60, long_polling_timeout=60, skip_pending=True)
             except Exception as e:
-                print(f"Telebot Error: {e}")
-                time.sleep(10)
+                if "409" in str(e) or "Conflict" in str(e):
+                    print("BHAI 2 BOT TAKRAYA BHAI 30 SEC RUK RAHA HU BHAI")
+                    time.sleep(30)
+                else:
+                    print(f"Telebot Error: {e}")
+                    time.sleep(10)
 
     threading.Thread(target=run_telebot, daemon=True).start()
 

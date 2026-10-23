@@ -10,10 +10,8 @@ import telebot
 app = Flask(__name__)
 
 # ===== CONFIG - DIP BUY BHAI - NEECHE PE KHARID UPAR PE BECH BHAI =====
-# BHAI BAS YAHAN CHANGE KIYA BHAI 6 COIN BHAI
 TRADE_SYMBOLS = ["SOLUSDT", "DOGEUSDT", "PEPEUSDT", "SHIBUSDT", "BONKUSDT", "FLOKIUSDT"]
 
-# BHAI HAR COIN KA ALAG DIP BHAI FINAL BHAI
 COINS_DIP = {
     "SOLUSDT": -1.0,
     "DOGEUSDT": -1.5,
@@ -25,12 +23,11 @@ COINS_DIP = {
 
 TRADE_PERCENT = 90
 STOP_LOSS_PERCENT = 1.2
-TAKE_PROFIT_PERCENT = 2.0  # BHAI 3 SE 2 KIYA BHAI JALDI PROFIT BHAI
+TAKE_PROFIT_PERCENT = 2.0
 DAILY_PROFIT_TARGET = 2.50
 DAILY_LOSS_LIMIT = 1
 daily_pnl = 0
 
-# ===== Telegram Send =====
 def send_telegram(msg):
     token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -40,7 +37,6 @@ def send_telegram(msg):
         requests.post(url, data={"chat_id": chat_id, "text": msg}, timeout=10)
     except: pass
 
-# ===== TELEGRAM /start /balance /status COMMAND =====
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_TOKEN")
 bot = None
 if BOT_TOKEN:
@@ -77,7 +73,6 @@ if BOT_TOKEN:
 
     threading.Thread(target=run_telebot, daemon=True).start()
 
-# ===== Flask =====
 @app.route('/')
 def home():
     return f"✅ Mohamed DIP Bot LIVE - NEECHE BUY / UPAR SELL - {TAKE_PROFIT_PERCENT}% Profit"
@@ -85,7 +80,6 @@ def home():
 @app.route('/health')
 def health(): return "OK", 200
 
-# ===== TRADING BOT =====
 def get_balance(client, asset="USDT"):
     try:
         bal = client.get_asset_balance(asset=asset)
@@ -125,6 +119,28 @@ def trading_bot():
 
     entry_prices = {}
 
+    # ===== BHAI SIRF YE ADD KIYA BHAI - ENTRY YAAD KAREGA BHAI =====
+    print("BHAI PURANA HOLDING CHECK KAR RAHA HU BHAI...")
+    for symbol in TRADE_SYMBOLS:
+        try:
+            base_coin = symbol.replace("USDT", "")
+            c_price = get_current_price(client, symbol)
+            if c_price == 0: continue
+            c_bal = get_balance(client, base_coin)
+            if c_bal * c_price > 1:
+                try:
+                    trades = client.get_my_trades(symbol=symbol, limit=10)
+                    last_buys = [t for t in trades if t['isBuyer']]
+                    if last_buys:
+                        entry_prices[symbol] = float(last_buys[-1]['price'])
+                    else:
+                        entry_prices[symbol] = c_price
+                except:
+                    entry_prices[symbol] = c_price
+                print(f"BHAI YAAD AAYA BHAI {symbol} Entry: {entry_prices[symbol]} Bhai!")
+        except: pass
+    # ===== ENTRY FIX KHATAM BHAI =====
+
     while True:
         try:
             if daily_pnl >= DAILY_PROFIT_TARGET:
@@ -138,7 +154,7 @@ def trading_bot():
 
             for symbol in TRADE_SYMBOLS:
                 try:
-                    time.sleep(2)  # BHAI IP BAN FIX BHAI
+                    time.sleep(2)
                     base_coin = symbol.replace("USDT", "")
                     current_price = get_current_price(client, symbol)
                     if current_price == 0: continue
@@ -148,11 +164,8 @@ def trading_bot():
                     ema9 = sum(closes[-9:]) / 9
                     ema21 = sum(closes[-21:]) / 21
 
-                    # BHAI NAYA LOGIC: KITNA GIRA BHAI?
-                    price_1h_ago = closes[-4]  # BHAI 1 GHANTA PEHLE BHAI 15MIN * 4
+                    price_1h_ago = closes[-4]
                     dip_percent = ((current_price - price_1h_ago) / price_1h_ago) * 100
-                    
-                    # BHAI YAHAN SE DIP NIKALA BHAI HAR COIN KA ALAG BHAI
                     dip_needed = COINS_DIP.get(symbol, -1.0)
 
                     usdt_balance = get_balance(client, "USDT")
@@ -160,7 +173,6 @@ def trading_bot():
 
                     print(f"Bhai Check {symbol} Price:{current_price} Dip:{dip_percent:.2f}% Need:{dip_needed}% EMA9:{ema9:.2f} EMA21:{ema21:.2f} USDT:{usdt_balance:.2f}")
 
-                    # ===== BHAI BAS YAHAN CHANGE KIYA BHAI - HAR COIN KA ALAG DIP BHAI =====
                     if ema9 < ema21 and dip_percent <= dip_needed and usdt_balance > 10:
                         if coin_balance * current_price < 5:
                             buy_usdt = usdt_balance * (TRADE_PERCENT / 100)
@@ -176,7 +188,10 @@ def trading_bot():
                                     except BinanceAPIException as e:
                                         print(f"Buy Error {symbol}: {e}")
 
-                    # ===== SELL SAME HAI BHAI =====
+                    # ===== BHAI SIRF YE ADD KIYA BHAI - ENTRY BHULA TO BHI BECHEGA BHAI =====
+                    if symbol not in entry_prices and coin_balance * current_price > 1:
+                        entry_prices[symbol] = current_price
+
                     if symbol in entry_prices and coin_balance * current_price > 5:
                         entry = entry_prices[symbol]
                         pnl_percent = ((current_price - entry) / entry) * 100

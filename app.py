@@ -15,11 +15,8 @@ DAILY_PROFIT_TARGET = 2.50
 DAILY_LOSS_LIMIT = 1
 daily_pnl = 0
 
-# CACHE BHAI - BAN SE BACHNE KE LIYE BHAI
 price_cache = {}
 precision_cache = {}
-
-# BHAI 2 - COIN NA BHULE BHAI - FILE SAVE BHAI
 ENTRY_FILE = "/tmp/entry_prices.json"
 def save_entries(d):
     try:
@@ -45,7 +42,6 @@ def home(): return f"✅ Mohamed DIP Bot LIVE - LOW WEIGHT - {TAKE_PROFIT_PERCEN
 @app.route('/health')
 def health(): return "OK", 200
 
-# BHAI 3 - TELEGRAM STATUS/BALANCE FIX BHAI - NO 409 BHAI
 @app.route('/telegram', methods=['POST'])
 def telegram_webhook():
     try:
@@ -102,7 +98,8 @@ def telegram_webhook():
 def set_webhook():
     token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_TOKEN")
     if not token: return "No Token Bhai"
-    url = request.host_url.rstrip('/') + "/telegram"
+    # BHAI FIX BHAI - HTTPS FORCE BHAI
+    url = "https://mohamed-proxe.onrender.com/telegram"
     try:
         r = requests.get(f"https://api.telegram.org/bot{token}/setWebhook?url={url}", timeout=10)
         return f"Webhook Set Bhai to {url} - {r.text}"
@@ -150,8 +147,7 @@ def trading_bot():
     usdt_bal = get_balance(client, "USDT")
     send_telegram(f"✅ DIP BOT LIVE Bhai! 🚀 LOW WEIGHT MODE Bhai!\n💰 USDT: ${usdt_bal:.2f}\nTarget: ${DAILY_PROFIT_TARGET}")
 
-    entry_prices = load_entries() # BHAI 2 - FILE SE YAAD BHAI
-    # OLD HOLDING CHECK
+    entry_prices = load_entries()
     for symbol in TRADE_SYMBOLS:
         try:
             base = symbol.replace("USDT", "")
@@ -195,12 +191,10 @@ def trading_bot():
 
                     print(f"Check {symbol} P:{current_price} Dip:{dip_percent:.2f}% Need:{dip_needed}%")
 
-                    # BHAI 2 - AGAR COIN HAI TO BHULEGA NAHI BHAI
                     if coin_balance * current_price > 1 and symbol not in entry_prices:
                         entry_prices[symbol] = current_price
                         save_entries(entry_prices)
 
-                    # BUY LOGIC - SAME BHAI
                     if ema9 < ema21 and dip_percent <= dip_needed and usdt_balance > 10:
                         if coin_balance * current_price < 5:
                             buy_usdt = usdt_balance * (TRADE_PERCENT / 100)
@@ -210,10 +204,9 @@ def trading_bot():
                                 if qty > 0:
                                     client.create_order(symbol=symbol, side='BUY', type='MARKET', quantity=qty)
                                     entry_prices[symbol] = current_price
-                                    save_entries(entry_prices) # BHAI 2
+                                    save_entries(entry_prices)
                                     send_telegram(f"🟢 DIP BUY Bhai!\n{symbol} @ {current_price}\nDip: {dip_percent:.2f}%")
 
-                    # SELL LOGIC - SAME BHAI
                     if symbol not in entry_prices and coin_balance * current_price > 1:
                         entry_prices[symbol] = current_price
                         save_entries(entry_prices)
@@ -230,7 +223,7 @@ def trading_bot():
                                 daily_pnl += profit
                                 send_telegram(f"{'🟢 PROFIT' if pnl_percent>0 else '🔴 LOSS'} SELL Bhai!\n{symbol} {pnl_percent:.2f}% (${profit:.2f})\nDaily: ${daily_pnl:.2f}")
                                 del entry_prices[symbol]
-                                save_entries(entry_prices) # BHAI 2
+                                save_entries(entry_prices)
 
                     time.sleep(3)
 
@@ -238,16 +231,16 @@ def trading_bot():
                     print(f"Error {symbol}: {e}")
                     if "-1003" in str(e) or "banned" in str(e).lower():
                         print("BHAI BAN HUA BHAI 1 HOUR SLEEP BHAI")
-                        time.sleep(3600)
+                        time.sleep(1200)
                         break
                     continue
 
             print(f"✅ Cycle Done - USDT: ${get_balance(client, 'USDT'):.2f} Bhai")
-            time.sleep(360) # BHAI 1 - 6 MIN KAR DIYA BHAI PEHLE 600 THA BHAI
+            time.sleep(360)
 
         except Exception as e:
             print(f"Loop Error: {e}")
-            if "-1003" in str(e): time.sleep(3600)
+            if "-1003" in str(e): time.sleep(1200)
             else: time.sleep(60)
 
 threading.Thread(target=trading_bot, daemon=True).start()

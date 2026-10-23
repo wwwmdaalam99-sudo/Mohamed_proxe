@@ -21,7 +21,7 @@ COINS_DIP = {
     "FLOKIUSDT": -5.0
 }
 
-TRADE_PERCENT = 90
+TRADE_PERCENT = 50
 STOP_LOSS_PERCENT = 1.2
 TAKE_PROFIT_PERCENT = 2.0
 DAILY_PROFIT_TARGET = 2.50
@@ -223,7 +223,7 @@ def trading_bot():
                     print(f"Error {symbol}: {e}")
                     continue
 
-                time.sleep(15)
+                time.sleep(20)
 
             print(f"✅ Cycle Complete - USDT: ${get_balance(client, 'USDT'):.2f} Bhai")
             time.sleep(600)

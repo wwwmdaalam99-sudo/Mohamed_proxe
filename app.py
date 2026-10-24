@@ -154,7 +154,7 @@ def trading_bot():
 
             for symbol in TRADE_SYMBOLS:
                 try:
-                    time.sleep(2)
+                    time.sleep(25)
                     base_coin = symbol.replace("USDT", "")
                     current_price = get_current_price(client, symbol)
                     if current_price == 0: continue
@@ -226,10 +226,10 @@ def trading_bot():
                     print(f"Error {symbol}: {e}")
                     continue
 
-                time.sleep(15)
+                time.sleep(25)
 
             print(f"✅ Cycle Complete - USDT: ${get_balance(client, 'USDT'):.2f} Bhai")
-            time.sleep(180)
+            time.sleep(300)
 
         except Exception as e:
             print(f"Loop Error: {e}")
@@ -237,7 +237,7 @@ def trading_bot():
                 print("BHAI BAN HAI BHAI 20 MIN RUK JA BHAI!")
                 time.sleep(1200)
             else:
-                time.sleep(10)
+                time.sleep(1200)
 
 threading.Thread(target=trading_bot, daemon=True).start()
 

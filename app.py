@@ -1,12 +1,7 @@
 import os
 import time
-import json
-import threading
 import requests
-from decimal import Decimal, ROUND_DOWN
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
+import threading
 from flask import Flask, request
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
@@ -14,425 +9,211 @@ import telebot
 
 app = Flask(__name__)
 
-# ============== CONFIG ==============
+# ===== CONFIG - DIP BUY BHAI - NEECHE PE KHARID UPAR PE BECH BHAI =====
 TRADE_SYMBOLS = ["SOLUSDT", "DOGEUSDT", "PEPEUSDT", "SHIBUSDT"]
-
-TRADE_PERCENT = 10.0
+TRADE_PERCENT = 40
 STOP_LOSS_PERCENT = 1.2
 TAKE_PROFIT_PERCENT = 2.0
 DAILY_PROFIT_TARGET = 2.50
-DAILY_LOSS_LIMIT = 1.00
+DAILY_LOSS_LIMIT = 1
+daily_pnl = 0
 
-CHECK_INTERVAL = 300
-LIVE_TRADING = os.getenv("LIVE_TRADING", "false").lower() == "true"
-
-DATA_FILE = os.getenv("TRADE_DATA_FILE", "/var/data/trade_data.json")
-TIMEZONE = ZoneInfo("Asia/Dubai")
-
-BOT_TOKEN = (
-    os.getenv("TELEGRAM_BOT_TOKEN")
-    or os.getenv("TELEGRAM_TOKEN")
-)
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-bot = telebot.TeleBot(BOT_TOKEN) if BOT_TOKEN else None
-state_lock = threading.RLock()
-trading_lock = threading.Lock()
-entry_prices = {}
-daily_pnl = 0.0
-daily_date = datetime.now(TIMEZONE).date().isoformat()
-reported_untracked = set()
-
-# ============== PERSISTENT STATE ==============
-def load_state():
-    global entry_prices, daily_pnl, daily_date
+# ===== Telegram Send =====
+def send_telegram(msg):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id: return
     try:
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
-        entry_prices = data.get("entry_prices", {})
-        daily_pnl = float(data.get("daily_pnl", 0.0))
-        daily_date = data.get(
-            "daily_date",
-            datetime.now(TIMEZONE).date().isoformat()
-        )
-        print("Saved trade state loaded.")
-    except FileNotFoundError:
-        print("No saved state. Existing Binance holdings need verification.")
-    except Exception as e:
-        print(f"STATE LOAD ERROR: {e}")
-        raise RuntimeError(
-            "Cannot safely load trade state. Trading must not start."
-        )
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        requests.post(url, data={"chat_id": chat_id, "text": msg}, timeout=10)
+    except: pass
 
-def save_state():
-    folder = os.path.dirname(DATA_FILE)
-    if folder:
-        os.makedirs(folder, exist_ok=True)
-    temp_file = DATA_FILE + ".tmp"
-    with open(temp_file, "w") as f:
-        json.dump({
-            "entry_prices": entry_prices,
-            "daily_pnl": daily_pnl,
-            "daily_date": daily_date
-        }, f)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(temp_file, DATA_FILE)
+# ===== TELEGRAM /start /balance /status COMMAND =====
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_TOKEN")
+bot = None
+if BOT_TOKEN:
+    bot = telebot.TeleBot(BOT_TOKEN)
 
-load_state()
+    @bot.message_handler(commands=['start'])
+    def start_cmd(m):
+        bot.reply_to(m, f"✅ Mohamed DIP Bot LIVE Bhai!\n💰 Daily Target: ${DAILY_PROFIT_TARGET}\n📉 Loss Limit: ${DAILY_LOSS_LIMIT}\nCoins: {', '.join(TRADE_SYMBOLS)}\nProfit: {TAKE_PROFIT_PERCENT}% / Loss: {STOP_LOSS_PERCENT}%\nStrategy: NEECHE PE BUY / UPAR PE SELL Bhai!\n/status /balance Working Bhai!")
 
-def reset_daily_pnl_if_needed():
-    global daily_pnl, daily_date
-    today = datetime.now(TIMEZONE).date().isoformat()
-    with state_lock:
-        if today != daily_date:
-            daily_date = today
-            daily_pnl = 0.0
-            save_state()
-            send_telegram("New Dubai trading day. Daily PnL reset.")
+    @bot.message_handler(commands=['balance'])
+    def balance_cmd(m):
+        try:
+            api_key = os.environ.get("BINANCE_API_KEY")
+            api_secret = os.environ.get("BINANCE_API_SECRET")
+            client = Client(api_key, api_secret)
+            usdt = float(client.get_asset_balance(asset="USDT")['free'])
+            aed = usdt * 3.67
+            bot.reply_to(m, f"💰 Balance Bhai:\nUSDT: ${usdt:.2f}\nAED: {aed:.2f} AED\nDaily PNL: ${daily_pnl:.2f}")
+        except Exception as e:
+            bot.reply_to(m, f"Error: {e}")
 
-# ============== TELEGRAM ==============
-def send_telegram(message):
-    if not BOT_TOKEN or not CHAT_ID:
-        print("Telegram credentials missing.")
-        return
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            data={"chat_id": CHAT_ID, "text": message},
-            timeout=10
-        ).raise_for_status()
-    except Exception as e:
-        print(f"Telegram send error: {e}")
+    @bot.message_handler(commands=['status'])
+    def status_cmd(m):
+        bot.reply_to(m, f"📊 DIP Bot ON Bhai!\nCoins: {', '.join(TRADE_SYMBOLS)}\nStrategy: NEECHE GIRNE PE BUY, UPAR JANE PE SELL Bhai!\nProfit: {TAKE_PROFIT_PERCENT}% | Loss: {STOP_LOSS_PERCENT}%\nDaily PNL: ${daily_pnl:.2f} / Target: ${DAILY_PROFIT_TARGET}\nCheck: Har 300 sec Bhai")
 
-def authorized(message):
-    return CHAT_ID and str(message.chat.id) == str(CHAT_ID)
-
-if bot:
-    @bot.message_handler(commands=["start", "status", "balance"])
-    def basic_commands(message):
-        if not authorized(message):
-            return
-        command = message.text.split()[0].split("@")[0].lower()
-        if command == "/start":
-            bot.reply_to(
-                message,
-                "DIP Bot connected.\n"
-                "Commands: /status /balance\n"
-                f"Live trading: {LIVE_TRADING}"
-            )
-        elif command == "/status":
-            with state_lock:
-                positions = dict(entry_prices)
-                pnl = daily_pnl
-            lines = [
-                "DIP BOT STATUS",
-                f"Mode: {'LIVE' if LIVE_TRADING else 'PAUSED'}",
-                f"Daily PnL estimate: ${pnl:.4f}",
-                f"Target: ${DAILY_PROFIT_TARGET:.2f}",
-                f"Loss limit: ${DAILY_LOSS_LIMIT:.2f}",
-                f"Check interval: {CHECK_INTERVAL}s",
-                "Tracked entries:"
-            ]
-            if positions:
-                for symbol, record in positions.items():
-                    lines.append(
-                        f"{symbol}: entry "
-                        f"{record.get('price', 'unknown')}, "
-                        f"qty {record.get('qty', 'unknown')}"
-                    )
-            else:
-                lines.append("No saved entries.")
-            bot.reply_to(message, "\n".join(lines))
-        elif command == "/balance":
-            try:
-                client = get_client()
-                usdt = get_balance(client, "USDT")
-                bot.reply_to(
-                    message,
-                    f"Free USDT: {usdt:.4f}\n"
-                    f"Approx AED: {usdt * 3.67:.2f}\n"
-                    f"Daily PnL estimate: ${daily_pnl:.4f}"
-                )
-            except Exception as e:
-                bot.reply_to(message, f"Balance error: {e}")
-
-# ============== FLASK / WEBHOOK ==============
-@app.route("/")
+# ===== Flask =====
+@app.route('/')
 def home():
-    return "DIP Bot service running", 200
+    return f"✅ Mohamed DIP Bot LIVE - NEECHE BUY / UPAR SELL - {TAKE_PROFIT_PERCENT}% Profit"
 
-@app.route("/health")
-def health():
-    return "OK", 200
+@app.route('/health')
+def health(): return "OK", 200
 
-@app.route("/telegram", methods=["POST"])
+@app.route('/telegram', methods=['POST'])
 def telegram_webhook():
-    if not bot:
-        return "Telegram not configured", 503
-    try:
-        update = telebot.types.Update.de_json(
-            request.get_data(as_text=True)
-        )
-        bot.process_new_updates([update])
-        return "OK", 200
-    except Exception as e:
-        print(f"Webhook error: {e}")
-        return "Webhook error", 500
+    if bot and request.method == "POST":
+        try:
+            json_str = request.stream.read().decode("utf-8")
+            update = telebot.types.Update.de_json(json_str)
+            bot.process_new_updates([update])
+        except Exception as e:
+            print(f"Webhook Error Bhai: {e}")
+        return "ok", 200
+    return "ok", 200
 
-@app.route("/setwebhook")
+@app.route('/setwebhook')
 def set_webhook_route():
-    if not bot:
-        return "Bot token missing", 503
+    if not bot: return "Bot Token Missing Bhai!"
+    url = f"https://mohamed-proxe.onrender.com/telegram"
+    bot.remove_webhook()
+    time.sleep(1)
+    s = bot.set_webhook(url=url)
+    return f"Webhook Set Bhai to {url} - {s} - ok:true"
 
-    # BHAI - Unauthorized check hata diya
-    url = os.getenv(
-        "WEBHOOK_URL",
-        "https://mohamed-proxe.onrender.com/telegram"
-    )
+# ===== TRADING BOT =====
+def get_balance(client, asset="USDT"):
     try:
-        bot.set_webhook(url=url)
-        return f"Webhook configured to {url}", 200
-    except Exception as e:
-        return f"Webhook setup failed: {e}", 500
+        bal = client.get_asset_balance(asset=asset)
+        return float(bal['free'])
+    except: return 0.0
 
-# ============== BINANCE HELPERS ==============
-def get_client():
-    key = os.getenv("BINANCE_API_KEY")
-    secret = os.getenv("BINANCE_API_SECRET")
-    if not key or not secret:
-        raise RuntimeError("Binance API credentials missing")
-    client = Client(key, secret)
-    client.get_server_time()
-    return client
+def get_current_price(client, symbol):
+    try:
+        return float(client.get_symbol_ticker(symbol=symbol)['price'])
+    except: return 0.0
 
-def get_balance(client, asset):
-    balance = client.get_asset_balance(asset=asset)
-    return float(balance["free"]) if balance else 0.0
+def get_qty_precision(client, symbol):
+    try:
+        info = client.get_symbol_info(symbol)
+        for f in info['filters']:
+            if f['filterType'] == 'LOT_SIZE':
+                step = f['stepSize']
+                if '.' in step:
+                    return len(step.split('.')[1].rstrip('0'))
+                return 0
+    except: pass
+    return 0
 
-def get_price(client, symbol):
-    result = client.get_symbol_ticker(symbol=symbol)
-    return float(result["price"])
-
-def get_symbol_rules(client, symbol):
-    info = client.get_symbol_info(symbol)
-    if not info:
-        raise RuntimeError(f"Symbol not found: {symbol}")
-    filters = {f["filterType"]: f for f in info["filters"]}
-    lot = filters["LOT_SIZE"]
-    min_notional = (
-        filters.get("NOTIONAL", {}).get("minNotional")
-        or filters.get("MIN_NOTIONAL", {}).get("minNotional")
-        or "0"
-    )
-    return {
-        "step": Decimal(lot["stepSize"]),
-        "min_qty": Decimal(lot["minQty"]),
-        "max_qty": Decimal(lot["maxQty"]),
-        "min_notional": Decimal(str(min_notional))
-    }
-
-def floor_quantity(quantity, step):
-    quantity = Decimal(str(quantity))
-    step = Decimal(str(step))
-    if step <= 0:
-        return Decimal("0")
-    return (
-        (quantity / step).to_integral_value(rounding=ROUND_DOWN)
-        * step
-    )
-
-def format_quantity(quantity):
-    return format(quantity, "f")
-
-def get_ema(values, period):
-    if len(values) < period:
-        return None
-    multiplier = 2 / (period + 1)
-    ema = sum(values[:period]) / period
-    for value in values[period:]:
-        ema = value * multiplier + ema * (1 - multiplier)
-    return ema
-
-def get_signals(client, symbol):
-    candles = client.get_klines(
-        symbol=symbol,
-        interval=Client.KLINE_INTERVAL_15MINUTE,
-        limit=50
-    )
-    closes = [float(c[4]) for c in candles[:-1]]
-    if len(closes) < 22:
-        raise RuntimeError("Not enough completed candles")
-    ema9 = get_ema(closes, 9)
-    ema21 = get_ema(closes, 21)
-    reference_price = closes[-4]
-    price = get_price(client, symbol)
-    dip = ((price - reference_price) / reference_price) * 100
-    return price, ema9, ema21, dip
-
-# ============== TRADING ==============
 def trading_bot():
     global daily_pnl
-    try:
-        client = get_client()
-        send_telegram(
-            "DIP Bot started.\n"
-            f"Trading mode: {'LIVE' if LIVE_TRADING else 'PAUSED'}\n"
-            f"Symbols: {', '.join(TRADE_SYMBOLS)}"
-        )
-    except Exception as e:
-        print(f"Binance startup error: {e}")
-        send_telegram(f"Bot startup failed: {e}")
+    print("🚀 DIP Bot Starting... NEECHE BUY / UPAR SELL Bhai!")
+    api_key = os.environ.get("BINANCE_API_KEY")
+    api_secret = os.environ.get("BINANCE_API_SECRET")
+    if not api_key or not api_secret:
+        print("❌ API Key Missing!")
         return
+
+    client = Client(api_key, api_secret)
+    usdt_bal = get_balance(client, "USDT")
+    aed_bal = usdt_bal * 3.67
+    send_telegram(f"✅ DIP BOT LIVE Bhai! 🚀\n\nStrategy: NEECHE GIRNE PE BUY / UPAR JANE PE SELL Bhai!\n\n💰 USDT: ${usdt_bal:.2f}\n💵 AED: {aed_bal:.2f} AED\nTarget: ${DAILY_PROFIT_TARGET} Bhai!")
+
+    entry_prices = {}
 
     while True:
         try:
-            reset_daily_pnl_if_needed()
-            with state_lock:
-                pnl = daily_pnl
-            if pnl >= DAILY_PROFIT_TARGET or pnl <= -DAILY_LOSS_LIMIT:
-                print("Daily limit reached. Trading paused until Dubai date changes.")
-                time.sleep(60)
+            if daily_pnl >= DAILY_PROFIT_TARGET:
+                send_telegram(f"✅ TARGET PURA BHAI! Daily: ${daily_pnl:.2f} Bhai Kal Tak Band Bhai!")
+                time.sleep(1200)
                 continue
+            if daily_pnl <= -DAILY_LOSS_LIMIT:
+                send_telegram(f"🛑 LOSS LIMIT BHAI! Daily: ${daily_pnl:.2f} Bhai Kal Tak Band Bhai!")
+                time.sleep(1200)
+                continue
+
             for symbol in TRADE_SYMBOLS:
                 try:
-                    with trading_lock:
-                        inspect_symbol(client, symbol)
-                except BinanceAPIException as e:
-                    print(f"Binance error {symbol}: {e}")
-                    if e.code == -1003:
-                        time.sleep(120)
+                    time.sleep(2)
+                    base_coin = symbol.replace("USDT", "")
+                    current_price = get_current_price(client, symbol)
+                    if current_price == 0: continue
+
+                    klines = client.get_klines(symbol=symbol, interval=Client.KLINE_INTERVAL_15MINUTE, limit=50)
+                    closes = [float(k[4]) for k in klines]
+                    ema9 = sum(closes[-9:]) / 9
+                    ema21 = sum(closes[-21:]) / 21
+                    price_1h_ago = closes[-4]
+                    dip_percent = ((current_price - price_1h_ago) / price_1h_ago) * 100
+
+                    usdt_balance = get_balance(client, "USDT")
+                    coin_balance = get_balance(client, base_coin)
+
+                    print(f"Bhai Check {symbol} Price:{current_price} Dip:{dip_percent:.2f}% EMA9:{ema9:.2f} EMA21:{ema21:.2f} USDT:{usdt_balance:.2f}")
+
+                    if ema9 < ema21 and dip_percent <= -1.0 and usdt_balance > 10:
+                        if coin_balance * current_price < 5:
+                            buy_usdt = usdt_balance * (TRADE_PERCENT / 100)
+                            if buy_usdt > 10:
+                                precision = get_qty_precision(client, symbol)
+                                qty = round(buy_usdt / current_price, precision)
+                                if qty > 0:
+                                    try:
+                                        order = client.create_order(symbol=symbol, side='BUY', type='MARKET', quantity=qty)
+                                        entry_prices[symbol] = current_price
+                                        send_telegram(f"🟢 DIP BUY Bhai! SASTA KHARIDA BHAI!\nCoin: {symbol}\nPrice: {current_price}\nDip: {dip_percent:.2f}%\nQty: {qty}\nEMA9 {ema9:.2f} < EMA21 {ema21:.2f} Bhai!")
+                                        print(f"DIP BUY {symbol} at {current_price} Dip {dip_percent:.2f}%")
+                                    except BinanceAPIException as e:
+                                        print(f"Buy Error {symbol}: {e}")
+
+                    if symbol in entry_prices and coin_balance * current_price > 5:
+                        entry = entry_prices[symbol]
+                        pnl_percent = ((current_price - entry) / entry) * 100
+
+                        if pnl_percent >= TAKE_PROFIT_PERCENT or pnl_percent <= -STOP_LOSS_PERCENT or ema9 > ema21:
+                            try:
+                                precision = get_qty_precision(client, symbol)
+                                qty_to_sell = round(coin_balance * 0.99, precision)
+                                if qty_to_sell > 0:
+                                    order = client.create_order(symbol=symbol, side='SELL', type='MARKET', quantity=qty_to_sell)
+                                    pnl_aed = (current_price - entry) * coin_balance * 3.67
+                                    profit_dollar = (current_price - entry) * coin_balance
+                                    daily_pnl += profit_dollar
+                                    reason = "PROFIT" if pnl_percent > 0 else "LOSS"
+                                    if ema9 > ema21:
+                                        reason = "UPAR GAYA - MEHENGA BECHA BHAI"
+                                    send_telegram(f"{'🟢 PROFIT SELL - UPAR BECHA BHAI!' if pnl_percent > 0 else '🔴 LOSS SELL'} Bhai!\nCoin: {symbol}\nReason: {reason}\nPNL: {pnl_percent:.2f}% (${profit_dollar:.2f} / AED {pnl_aed:.2f})\nDaily: ${daily_pnl:.2f}")
+                                    del entry_prices[symbol]
+                                    print(f"SELL - {symbol} PNL {pnl_percent}% Reason: {reason}")
+                            except BinanceAPIException as e:
+                                try:
+                                    qty_to_sell = round(coin_balance, precision)
+                                    client.create_order(symbol=symbol, side='SELL', type='MARKET', quantity=qty_to_sell)
+                                    del entry_prices[symbol]
+                                except Exception as e2:
+                                    print(f"Sell Error {symbol}: {e2}")
+                                    pass
                 except Exception as e:
-                    print(f"Symbol error {symbol}: {e}")
-                time.sleep(2)
-            time.sleep(CHECK_INTERVAL)
+                    print(f"Error {symbol}: {e}")
+                    continue
+
+                time.sleep(15)
+
+            print(f"✅ Cycle Complete - USDT: ${get_balance(client, 'USDT'):.2f} Bhai")
+            time.sleep(180)
+
         except Exception as e:
-            print(f"Main loop error: {e}")
-            time.sleep(15)
+            print(f"Loop Error: {e}")
+            if "-1003" in str(e) or "banned" in str(e).lower():
+                print("BHAI BAN HAI BHAI 20 MIN RUK JA BHAI!")
+                time.sleep(1200)
+            else:
+                time.sleep(10)
 
-def inspect_symbol(client, symbol):
-    global daily_pnl
-    base_asset = symbol.replace("USDT", "")
-    price, ema9, ema21, dip = get_signals(client, symbol)
-    balance = get_balance(client, base_asset)
-    value = balance * price
-    with state_lock:
-        record = entry_prices.get(symbol)
-    print(
-        f"{symbol} price={price} dip={dip:.2f}% "
-        f"EMA9={ema9:.8f} EMA21={ema21:.8f} "
-        f"balance={balance:.8f}"
-    )
-    if record is None and value > 5:
-        if symbol not in reported_untracked:
-            send_telegram(
-                f"⚠️ UNTRACKED HOLDING: {symbol}\n"
-                f"Balance value: approximately ${value:.2f}\n"
-                "No automatic SELL: purchase entry is unknown.\n"
-                "Verify Binance trade history before recording its entry."
-            )
-            reported_untracked.add(symbol)
-        return
-    if record is not None:
-        entry = float(record["price"])
-        saved_qty = float(record["qty"])
-        pnl_percent = ((price - entry) / entry) * 100
-        sell_balance = min(balance, saved_qty)
-        should_sell = (
-            pnl_percent >= TAKE_PROFIT_PERCENT
-            or pnl_percent <= -STOP_LOSS_PERCENT
-            or ema9 > ema21
-        )
-        if should_sell and sell_balance > 0:
-            if not LIVE_TRADING:
-                print(f"PAUSED: SELL signal {symbol} ({pnl_percent:.2f}%)")
-                return
-            rules = get_symbol_rules(client, symbol)
-            qty = floor_quantity(sell_balance * 0.99, rules["step"])
-            if qty < rules["min_qty"] or qty * Decimal(str(price)) < rules["min_notional"]:
-                print(f"Sell quantity below exchange minimum: {symbol}")
-                return
-            order = client.create_order(
-                symbol=symbol,
-                side="SELL",
-                type="MARKET",
-                quantity=format_quantity(qty)
-            )
-            executed_qty = float(order.get("executedQty", 0))
-            quote_qty = float(order.get("cummulativeQuoteQty", 0))
-            if executed_qty <= 0:
-                send_telegram(f"SELL order returned zero fill: {symbol}")
-                return
-            average_sell = quote_qty / executed_qty
-            gross_pnl = (average_sell - entry) * executed_qty
-            with state_lock:
-                daily_pnl += gross_pnl
-                remaining_qty = max(saved_qty - executed_qty, 0)
-                if remaining_qty * price > 5:
-                    entry_prices[symbol]["qty"] = remaining_qty
-                else:
-                    entry_prices.pop(symbol, None)
-                save_state()
-            send_telegram(
-                f"SELL FILLED: {symbol}\n"
-                f"Average sell: {average_sell:.8f}\n"
-                f"Executed qty: {executed_qty:.8f}\n"
-                f"Price change: {pnl_percent:.2f}%\n"
-                f"Estimated gross PnL: ${gross_pnl:.4f}\n"
-                f"Daily estimated gross PnL: ${daily_pnl:.4f}\n"
-                "Fees may not be included."
-            )
-        return
-    if ema9 < ema21 and dip <= -1.0:
-        usdt = get_balance(client, "USDT")
-        buy_amount = usdt * (TRADE_PERCENT / 100)
-        if buy_amount <= 10:
-            return
-        if not LIVE_TRADING:
-            print(f"PAUSED: BUY signal {symbol}")
-            return
-        rules = get_symbol_rules(client, symbol)
-        qty = floor_quantity(
-            Decimal(str(buy_amount / price)),
-            rules["step"]
-        )
-        if qty < rules["min_qty"]:
-            print(f"Buy quantity too small: {symbol}")
-            return
-        if qty * Decimal(str(price)) < rules["min_notional"]:
-            print(f"Buy value below exchange minimum: {symbol}")
-            return
-        order = client.create_order(
-            symbol=symbol,
-            side="BUY",
-            type="MARKET",
-            quantity=format_quantity(qty)
-        )
-        executed_qty = float(order.get("executedQty", 0))
-        quote_qty = float(order.get("cummulativeQuoteQty", 0))
-        if executed_qty <= 0 or quote_qty <= 0:
-            send_telegram(f"BUY returned no confirmed fill: {symbol}")
-            return
-        actual_entry = quote_qty / executed_qty
-        with state_lock:
-            entry_prices[symbol] = {
-                "price": actual_entry,
-                "qty": executed_qty
-            }
-            save_state()
-        send_telegram(
-            f"BUY FILLED: {symbol}\n"
-            f"Average entry: {actual_entry:.8f}\n"
-            f"Executed qty: {executed_qty:.8f}\n"
-            f"Dip: {dip:.2f}%\n"
-            "Entry saved."
-        )
+threading.Thread(target=trading_bot, daemon=True).start()
 
-# ============== STARTUP ==============
-if __name__ == "__main__":
-    if not os.path.exists(DATA_FILE):
-        print("WARNING: Trade state file does not exist.")
-    thread = threading.Thread(target=trading_bot, daemon=True)
-    thread.start()
-    port = int(os.getenv("PORT", "10000"))
-    app.run(host="0.0.0.0", port=port, use_reloader=False)
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)

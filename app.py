@@ -2,12 +2,29 @@ import os
 import time
 import requests
 import threading
+import json
 from flask import Flask, request
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 import telebot
 
 app = Flask(__name__)
+
+# ===== FIX - BHULEGA NAHI BHAI - FILE ME SAVE BHAI =====
+ENTRY_FILE = "entry_prices.json"
+def load_entries():
+    try:
+        if os.path.exists(ENTRY_FILE):
+            with open(ENTRY_FILE, "r") as f:
+                return json.load(f)
+    except: pass
+    return {}
+
+def save_entries(data):
+    try:
+        with open(ENTRY_FILE, "w") as f:
+            json.dump(data, f)
+    except: pass
 
 # ===== CONFIG - DIP BUY BHAI - NEECHE PE KHARID UPAR PE BECH BHAI =====
 TRADE_SYMBOLS = ["SOLUSDT", "DOGEUSDT", "PEPEUSDT", "SHIBUSDT"]
@@ -121,7 +138,8 @@ def trading_bot():
     aed_bal = usdt_bal * 3.67
     send_telegram(f"✅ DIP BOT LIVE Bhai! 🚀\n\nStrategy: NEECHE GIRNE PE BUY / UPAR JANE PE SELL Bhai!\n\n💰 USDT: ${usdt_bal:.2f}\n💵 AED: {aed_bal:.2f} AED\nTarget: ${DAILY_PROFIT_TARGET} Bhai!")
 
-    entry_prices = {}
+    entry_prices = load_entries()
+    print(f"Bhai Loaded Entries Bhai: {entry_prices}")
 
     while True:
         try:
@@ -151,6 +169,12 @@ def trading_bot():
                     usdt_balance = get_balance(client, "USDT")
                     coin_balance = get_balance(client, base_coin)
 
+                    # BHAI AGAR COIN PEHLE SE HOLD HAI AUR ENTRY BHUL GAYA BHAI TO BHAI YAAD KAR LE BHAI
+                    if coin_balance * current_price > 5 and symbol not in entry_prices:
+                        entry_prices[symbol] = current_price
+                        save_entries(entry_prices)
+                        print(f"Bhai Found Old Holding {symbol} Entry Set {current_price}")
+
                     print(f"Bhai Check {symbol} Price:{current_price} Dip:{dip_percent:.2f}% EMA9:{ema9:.2f} EMA21:{ema21:.2f} USDT:{usdt_balance:.2f}")
 
                     if ema9 < ema21 and dip_percent <= -1.0 and usdt_balance > 10:
@@ -163,6 +187,7 @@ def trading_bot():
                                     try:
                                         order = client.create_order(symbol=symbol, side='BUY', type='MARKET', quantity=qty)
                                         entry_prices[symbol] = current_price
+                                        save_entries(entry_prices)
                                         send_telegram(f"🟢 DIP BUY Bhai! SASTA KHARIDA BHAI!\nCoin: {symbol}\nPrice: {current_price}\nDip: {dip_percent:.2f}%\nQty: {qty}\nEMA9 {ema9:.2f} < EMA21 {ema21:.2f} Bhai!")
                                         print(f"DIP BUY {symbol} at {current_price} Dip {dip_percent:.2f}%")
                                     except BinanceAPIException as e:
@@ -186,12 +211,14 @@ def trading_bot():
                                         reason = "UPAR GAYA - MEHENGA BECHA BHAI"
                                     send_telegram(f"{'🟢 PROFIT SELL - UPAR BECHA BHAI!' if pnl_percent > 0 else '🔴 LOSS SELL'} Bhai!\nCoin: {symbol}\nReason: {reason}\nPNL: {pnl_percent:.2f}% (${profit_dollar:.2f} / AED {pnl_aed:.2f})\nDaily: ${daily_pnl:.2f}")
                                     del entry_prices[symbol]
+                                    save_entries(entry_prices)
                                     print(f"SELL - {symbol} PNL {pnl_percent}% Reason: {reason}")
                             except BinanceAPIException as e:
                                 try:
                                     qty_to_sell = round(coin_balance, precision)
                                     client.create_order(symbol=symbol, side='SELL', type='MARKET', quantity=qty_to_sell)
                                     del entry_prices[symbol]
+                                    save_entries(entry_prices)
                                 except Exception as e2:
                                     print(f"Sell Error {symbol}: {e2}")
                                     pass
